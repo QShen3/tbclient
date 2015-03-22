@@ -8,7 +8,10 @@
 #include "src/httpuploader.h"
 #include "src/audiorecorder.h"
 #include "src/scribblearea.h"
+#ifndef Q_OS_S60V5
 #include "src/qwebviewitem.h"
+#endif
+#include "src/imageuploader.h"
 
 #ifdef Q_WS_SIMULATOR
 #include <QtNetwork/QNetworkProxy>
@@ -16,6 +19,16 @@
 
 #ifdef QVIBRA
 #include "QVibra/qvibra.h"
+#endif
+
+#ifdef Q_OS_HARMATTAN
+#include <QtDBus/QDBusConnection>
+#include "src/tbclientif.h"
+#include "src/harmattanbackgroundprovider.h"
+#endif
+
+#ifdef Q_OS_S60V5
+#include "applicationactivelistener.h"
 #endif
 
 #ifdef Q_OS_SYMBIAN
@@ -45,25 +58,31 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
 {
     // Symbian specific
 #ifdef Q_OS_SYMBIAN
+#ifndef Q_OS_S60V5
     QApplication::setAttribute(Qt::AA_CaptureMultimediaKeys);
+#endif
     QScopedPointer<QApplication> app(new SymbianApplication(argc, argv));
 #else
     QScopedPointer<QApplication> app(createApplication(argc, argv));
 #endif
 
-#ifdef Q_OS_SYMBIAN
-    QSplashScreen *splash = new QSplashScreen(QPixmap(":/qml/gfx/splash.jpg"));
-    splash->show();
-    splash->raise();
-#elif defined(Q_WS_SIMULATOR)
-    QSplashScreen *splash = new QSplashScreen(QPixmap("qml/gfx/splash.jpg"));
+#if defined(Q_OS_SYMBIAN)||defined(Q_WS_SIMULATOR)
+#ifdef Q_OS_S60V5
+    QSplashScreen *splash = new QSplashScreen(QPixmap("qml/symbian1/gfx/splash.jpg"));
+#else
+    QSplashScreen *splash = new QSplashScreen(QPixmap("qml/tbclient/gfx/splash.jpg"));
+#endif
     splash->show();
     splash->raise();
 #endif
 
     app->setApplicationName("tbclient");
     app->setOrganizationName("Yeatse");
+#ifdef Q_OS_S60V5
+    app->setApplicationVersion("2.1.5");
+#else
     app->setApplicationVersion(VER);
+#endif
 
     // Install translator for qt
     QString locale = QLocale::system().name();
@@ -82,7 +101,10 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     qmlRegisterType<Downloader>("com.yeatse.tbclient", 1, 0, "Downloader");
     qmlRegisterType<AudioRecorder>("com.yeatse.tbclient", 1, 0, "AudioRecorder");
     qmlRegisterType<ScribbleArea>("com.yeatse.tbclient", 1, 0, "ScribbleArea");
+#ifndef Q_OS_S60V5
     qmlRegisterType<QWebViewItem>("com.yeatse.tbclient", 1, 0, "WebView");
+#endif
+    qmlRegisterType<ImageUploader>("com.yeatse.tbclient", 1, 0, "ImageUploader");
 
 #ifdef QVIBRA
     qmlRegisterType<QVibra>("com.yeatse.tbclient", 1, 0, "Vibra");
@@ -90,13 +112,29 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     qmlRegisterType<QObject>("com.yeatse.tbclient", 1, 0, "Vibra");
 #endif
 
-    QWebSettings::globalSettings()->setUserStyleSheetUrl(QUrl::fromLocalFile("qml/emo/default_theme.css"));
+#ifdef Q_OS_HARMATTAN
+    QWebSettings::globalSettings()->setUserStyleSheetUrl(QUrl::fromLocalFile("/opt/tbclient/qml/js/default_theme.css"));
+#else
+    QWebSettings::globalSettings()->setUserStyleSheetUrl(QUrl::fromLocalFile("qml/js/default_theme.css"));
+#endif
 
     QmlApplicationViewer viewer;
     viewer.setAttribute(Qt::WA_OpaquePaintEvent);
     viewer.setAttribute(Qt::WA_NoSystemBackground);
     viewer.viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
     viewer.viewport()->setAttribute(Qt::WA_NoSystemBackground);
+
+#ifdef Q_OS_HARMATTAN
+    new TBClientIf(app.data(), &viewer);
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    bus.registerService("com.tbclient");
+    bus.registerObject("/com/tbclient", app.data());
+#endif
+
+#ifdef Q_OS_S60V5
+    ApplicationActiveListener listener;
+    viewer.rootContext()->setContextProperty("activeListener", &listener);
+#endif
 
     // For fiddler network debugging
 #ifdef Q_WS_SIMULATOR
@@ -114,14 +152,33 @@ Q_DECL_EXPORT int main(int argc, char *argv[])
     utility->setEngine(viewer.engine());
     viewer.rootContext()->setContextProperty("utility", utility);
 
+#ifdef Q_OS_HARMATTAN
+    HarmattanBackgroundProvider provider;
+    viewer.engine()->addImageProvider("bgProvider", &provider);
+#endif
+
     // For smoother flicking (only supported by Belle FP2)
     if (utility->qtVersion() > 0x040800)
         QApplication::setStartDragDistance(2);
 
-#ifdef Q_OS_SYMBIAN
-    viewer.setSource(QUrl("qrc:/qml/tbclient/main.qml"));
+    // Initialize settings
+    if (!utility->getValue("AppVersion","").toString().startsWith("2.1")){
+        utility->clearSettings();
+#ifdef Q_OS_S60V5
+        utility->setValue("AppVersion", "2.1.5");
 #else
+        utility->setValue("AppVersion", VER);
+#endif
+    }
+
+#ifdef Q_OS_S60V5
+    viewer.setMainQmlFile(QLatin1String("qml/symbian1/main.qml"));
+#elif defined(Q_OS_SYMBIAN)
     viewer.setMainQmlFile(QLatin1String("qml/tbclient/main.qml"));
+#elif defined(Q_OS_HARMATTAN)
+    viewer.setMainQmlFile(QLatin1String("qml/harmattan/main.qml"));
+#else
+    viewer.setMainQmlFile(QLatin1String("qml/symbian1/main.qml"));
 #endif
     viewer.showExpanded();
 

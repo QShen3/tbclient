@@ -18,9 +18,11 @@ MyPage {
         BackButton {
             onClicked: {
                 tbsettings.draftBox = contentArea.text;
+                Post.uploadCanceled = true;
                 if (uploader.uploadState == HttpUploader.Loading){
                     uploader.abort();
                 }
+                imageUploader.abortUpload();
             }
         }
     }
@@ -29,6 +31,7 @@ MyPage {
         target: signalCenter;
         onUploadFailed: if (caller === page) Post.uploadFailed();
         onUploadFinished: if (caller === page) Post.uploadFinished(response);
+        onImageUploadFinished: if (caller === page) Post.imageUploadFinished(result);
         onVcodeSent: if (caller === page) Post.post(vcode, vcodeMd5);
         onFriendSelected: {
             if (caller === page){
@@ -110,12 +113,12 @@ MyPage {
             spacing: constant.paddingSmall;
             ToolButton {
                 platformInverted: tbsettings.whiteTheme;
-                iconSource: "../../gfx/btn_insert_face"+constant.invertedString+".png"
+                iconSource: "../gfx/btn_insert_face"+constant.invertedString+".png"
                 onClicked: signalCenter.createEmoticonDialog(page);
             }
             ToolButton {
                 platformInverted: tbsettings.whiteTheme;
-                iconSource: "../../gfx/btn_insert_at"+constant.invertedString+".png";
+                iconSource: "../gfx/btn_insert_at"+constant.invertedString+".png";
                 onClicked: {
                     var prop = { type: "at", caller: page }
                     pageStack.push(Qt.resolvedUrl("../Profile/SelectFriendPage.qml"), prop);
@@ -125,11 +128,11 @@ MyPage {
                 id: picBtn;
                 checkable: true;
                 platformInverted: tbsettings.whiteTheme;
-                iconSource: "../../gfx/btn_insert_pics"+constant.invertedString+".png";
+                iconSource: "../gfx/btn_insert_pics"+constant.invertedString+".png";
                 onClicked: attachedArea.state = attachedArea.state == "Image" ? "" : "Image";
                 Image {
                     anchors { top: parent.top; right: parent.right; }
-                    source: "../../gfx/ico_mbar_news_point.png";
+                    source: "../gfx/ico_mbar_news_point.png";
                     visible: attachedArea.imageList.length > 0;
                 }
             }
@@ -137,11 +140,11 @@ MyPage {
                 id: voiBtn;
                 checkable: true;
                 platformInverted: tbsettings.whiteTheme;
-                iconSource: "../../gfx/btn_insert_voice"+constant.invertedString+".png";
+                iconSource: "../gfx/btn_insert_voice"+constant.invertedString+".png";
                 onClicked: attachedArea.state = attachedArea.state == "Voice" ? "" : "Voice";
                 Image {
                     anchors { top: parent.top; right: parent.right; }
-                    source: "../../gfx/ico_mbar_news_point.png";
+                    source: "../gfx/ico_mbar_news_point.png";
                     visible: attachedArea.audioFile.length > 0;
                 }
             }
@@ -158,7 +161,8 @@ MyPage {
 
     AttachedArea {
         id: attachedArea;
-        enabled: uploader.uploadState != HttpUploader.Loading||uploader.caller != page;
+        enabled: (uploader.uploadState != HttpUploader.Loading||uploader.caller != page)
+                 &&(!imageUploader.isRunning||imageUploader.caller != page);
         onStateChanged: {
             picBtn.checked = state === "Image";
             voiBtn.checked = state === "Voice";
@@ -174,7 +178,7 @@ MyPage {
         ProgressBar {
             anchors.bottom: parent.bottom;
             width: parent.width;
-            value: uploader.progress;
+            value: imageUploader.isRunning ? imageUploader.progress : uploader.progress;
             platformInverted: tbsettings.whiteTheme;
             visible: !(attachedArea.enabled||attachedArea.state=="");
         }

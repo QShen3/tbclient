@@ -27,6 +27,7 @@ QtObject {
 
     signal uploadFinished(variant caller, string response);
     signal uploadFailed(variant caller);
+    signal imageUploadFinished(variant caller, variant result);
 
     // Common functions
     function showMessage(msg){
@@ -40,27 +41,26 @@ QtObject {
         LinkDecoder.linkActivated(link);
     }
 
-    function clearLocalCache(){
+    function clearLocalCache(cookie){
         mainPage.forceRefresh = true;
         utility.clearUserData();
-        utility.clearCookies();
+        if (cookie) utility.clearCookies();
     }
 
     // Dialogs
-    function needVCode(caller, vcodeMd5, vcodePicUrl){
-        if (!vcodeDialogComp){
-            vcodeDialogComp = Qt.createComponent("Dialog/VCodeDialog.qml");
-        }
+    function needVCode(caller, vcodeMd5, vcodePicUrl, isNew){
         var prop = { caller: caller, vcodeMd5: vcodeMd5, vcodePicUrl: vcodePicUrl }
-        vcodeDialogComp.createObject(pageStack.currentPage, prop);
-    }
-
-    function needVCodeNew(caller, vcodeMd5, vcodePicUrl){
-        if (!newVCodeDialogComp){
-            newVCodeDialogComp = Qt.createComponent("Dialog/NewVCodeDialog.qml");
+        if (isNew){
+            if (!newVCodeDialogComp){
+                newVCodeDialogComp = Qt.createComponent("Dialog/NewVCodeDialog.qml");
+            }
+            newVCodeDialogComp.createObject(pageStack.currentPage, prop);
+        } else {
+            if (!vcodeDialogComp){
+                vcodeDialogComp = Qt.createComponent("Dialog/VCodeDialog.qml");
+            }
+            vcodeDialogComp.createObject(pageStack.currentPage, prop);
         }
-        var prop = { caller: caller, vcodeMd5: vcodeMd5, vcodePicUrl: vcodePicUrl }
-        newVCodeDialogComp.createObject(pageStack.currentPage, prop);
     }
 
     function createQueryDialog(title, message, acceptText, rejectText, acceptCallback, rejectCallback){
@@ -195,8 +195,9 @@ QtObject {
     }
 
     function openBrowser(url){
+        url = utility.fixUrl(url);
         if (tbsettings.browser == ""){
-            pageStack.push(Qt.resolvedUrl("Browser/WebPage.qml"), {url: utility.percentDecode(url)});
+            pageStack.push(Qt.resolvedUrl("Browser/WebPage.qml"), {url: url});
         } else {
             utility.openURLDefault(url);
         }

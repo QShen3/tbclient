@@ -30,6 +30,7 @@ public:             // Cache and network
     // Save and load settings.
     Q_INVOKABLE QVariant getValue(const QString &key, const QVariant defaultValue = QVariant());
     Q_INVOKABLE void setValue(const QString &key, const QVariant &value);
+    Q_INVOKABLE void clearSettings();
 
     // Save and load user data.
     Q_INVOKABLE void setUserData(const QString &key, const QString &data);
@@ -68,7 +69,10 @@ public:             // Symbian avkon helper.
     Q_INVOKABLE QColor selectColor(const QColor &defaultColor);
 
     // Show notification
-    Q_INVOKABLE void showNotification(const QString &title, const QString &message) const;
+    Q_INVOKABLE void showNotification(const QString &title, const QString &message);
+
+    // Clear notification list
+    Q_INVOKABLE void clearNotifications();
 
 #ifdef Q_OS_SYMBIAN
     void LaunchL(int id, const QString& param);
@@ -81,6 +85,7 @@ public:             // Other functions.
     Q_INVOKABLE QString chunkFile(const QString &filename, int pos, int length = 30720);
     Q_INVOKABLE void copyToClipbord(const QString &text);
     Q_INVOKABLE QString cutImage(const QString &filename, double scale, int x, int y, int width, int height);
+    Q_INVOKABLE QString resizeImage(const QString &filename);
 
     // Make date readable
     Q_INVOKABLE QString easyDate(const QDateTime &date);
@@ -90,6 +95,8 @@ public:             // Other functions.
     Q_INVOKABLE QString percentDecode(const QString &encodedString) const;
     // Return forum name if it is a tieba link
     Q_INVOKABLE QString hasForumName(const QByteArray &link);
+    // Fix unsupported url
+    Q_INVOKABLE QString fixUrl(const QString &url) const;
 
     // Return image url if it is an existing emoticon
     Q_INVOKABLE QString emoticonUrl(const QString &name) const;
@@ -97,6 +104,11 @@ public:             // Other functions.
     Q_INVOKABLE QString emoticonText(const QString &name);
     // Return custom emoticon list
     Q_INVOKABLE QStringList customEmoticonList();
+
+#ifdef Q_OS_HARMATTAN
+signals:
+    void imageCaptured(const QString &filename);
+#endif
 
 private:
     explicit Utility(QObject *parent = 0);    
@@ -115,6 +127,14 @@ private:
     // Otherwise return selected image url;
     QString LaunchLibrary();
     QString LaunchLibrary2();
+#endif
+
+#ifdef Q_OS_HARMATTAN
+    void startCamera();
+    void disconnectSignals();
+private slots:
+    void captureCanceled(const QString &mode);
+    void captureCompleted(const QString &mode, const QString &fileName);
 #endif
 
 private:

@@ -28,3 +28,10 @@ bld.inf
 *_exe.mmp
 *.pkg
 *.sis
+ABLD.BAT
+*.mk
+
+# debian-es
+tbclient
+*.changes
+*.deb

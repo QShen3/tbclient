@@ -19,13 +19,7 @@ Item {
             if (urls.length > 0){
                 var newList = [];
                 var urlList = urls.split("\n");
-                imageList.forEach(function(value){
-                                      if (utility.fileSize(value) < 0x500000){
-                                          newList.push(value);
-                                      } else {
-                                          signalCenter.showMessage(qsTr("Image size should be no larger than 5M"));
-                                      }
-                                  });
+                imageList.forEach(function(value){newList.push(value)});
                 urlList = urlList.filter(function(value){return newList.indexOf(value) === -1});
                 imageList = newList.concat(urlList).slice(0,10);
             }
@@ -76,7 +70,7 @@ Item {
                             margins: -constant.paddingMedium;
                         }
                         platformInverted: tbsettings.whiteTheme;
-                        iconSource: "../../gfx/tb_close_stop"+constant.invertedString+".svg";
+                        iconSource: "../gfx/tb_close_stop"+constant.invertedString+".svg";
                         onClicked: internal.removeImage(modelData);
                     }
                 }

@@ -1,7 +1,7 @@
 TEMPLATE = app
 TARGET = tbclient
 
-VERSION = 2.1.1
+VERSION = 2.1.5
 DEFINES += VER=\\\"$$VERSION\\\"
 
 QT += network webkit
@@ -18,7 +18,8 @@ HEADERS += \
     src/audiorecorder.h \
     src/scribblearea.h \
     src/flickcharm.h \
-    src/qwebviewitem.h
+    src/qwebviewitem.h \
+    src/imageuploader.h
 
 SOURCES += main.cpp \
     src/utility.cpp \
@@ -29,7 +30,9 @@ SOURCES += main.cpp \
     src/scribblearea.cpp \
     src/flickcharm.cpp \
     src/qwebviewitem.cpp \
+    src/imageuploader.cpp \
 #    qml/tbclient/*.qml \
+#    qml/tbclient/Browser/*.qml \
 #    qml/tbclient/Component/*.qml \
 #    qml/tbclient/Dialog/*.qml \
 #    qml/tbclient/Explore/*.qml \
@@ -39,7 +42,6 @@ SOURCES += main.cpp \
 #    qml/tbclient/Post/*.* \
 #    qml/tbclient/Profile/*.qml \
 #    qml/tbclient/Thread/*.qml \
-#    qml/tbclient/Browser/*.qml \
 #    qml/js/main.js \
 #    qml/js/BaiduParser.js \
 #    qml/js/LinkDecoder.js
@@ -54,42 +56,55 @@ folder_symbian3.target = qml
 folder_symbian1.source = qml/symbian1
 folder_symbian1.target = qml
 
-folder_harmattan.source = qml/meego
+folder_harmattan.source = qml/harmattan
 folder_harmattan.target = qml
 
 folder_js.source = qml/js
 folder_js.target = qml
 
-folder_gfx.source = qml/gfx
-folder_gfx.target = qml
-
 folder_emo.source = qml/emo
 folder_emo.target = qml
 
-DEPLOYMENTFOLDERS = folder_emo
+DEPLOYMENTFOLDERS = folder_js folder_emo
 
 simulator {
-    DEPLOYMENTFOLDERS += folder_js folder_symbian3 folder_gfx
+    DEPLOYMENTFOLDERS += folder_symbian3 folder_symbian1 folder_harmattan
 }
 
 contains(MEEGO_EDITION,harmattan){
     DEFINES += Q_OS_HARMATTAN
-    CONFIG += qdeclarative-boostable meegotouch
+    CONFIG += qdeclarative-boostable
+    CONFIG += videosuiteinterface-maemo-meegotouch  #video suite
+    CONFIG += meegotouch
     QT += dbus
     MOBILITY += gallery
+
+    HEADERS += src/tbclientif.h \
+        src/harmattanbackgroundprovider.h
+    SOURCES += src/tbclientif.cpp \
+        src/harmattanbackgroundprovider.cpp
+
+    include(notifications/notifications.pri)
+
+    splash.files = splash/splash.png
+    splash.path = /opt/tbclient/splash
+    INSTALLS += splash
 
     DEPLOYMENTFOLDERS += folder_harmattan
 }
 
 symbian {
-    contains(S60_VERSION, 5.0){
+#    contains(S60_VERSION, 5.0){
+    contains(QT_VERSION, 4.7.3){
         DEFINES += Q_OS_S60V5
         INCLUDEPATH += $$[QT_INSTALL_PREFIX]/epoc32/include/middleware
         INCLUDEPATH += $$[QT_INSTALL_PREFIX]/include/Qt
+        DEPLOYMENTFOLDERS += folder_symbian1
+        MMP_RULES += "DEBUGGABLE"
     } else {
         CONFIG += qt-components
-        RESOURCES += symbian-res.qrc
         MMP_RULES += "OPTION gcce -march=armv6 -mfpu=vfp -mfloat-abi=softfp -marm"
+        DEPLOYMENTFOLDERS += folder_symbian3
     }
 
     CONFIG += localize_deployment
@@ -111,6 +126,14 @@ symbian {
         -lapparc -lws32 -lapgrfx \      #for Launching app
         -lServiceHandler -lnewservice \ #and -lbafl for Camera
         -lavkon \                       #for notification
+
+    contains(DEFINES, Q_OS_S60V5){
+        LIBS *= -laknnotify -leiksrv    #for global notes
+        HEADERS += src/applicationactivelistener.h
+        SOURCES += src/applicationactivelistener.cpp
+        HEADERS -= src/qwebviewitem.h
+        SOURCES -= src/qwebviewitem.cpp
+    }
 
     DEFINES += QVIBRA
 

@@ -30,6 +30,7 @@ var BaiduApi = {
     C_S_HISTORYMSG: HOST + "/c/s/historymsg",
     C_S_ADDMSG: HOST + "/c/s/addmsg",
     C_S_CLEARMSG: HOST + "/c/s/clearmsg",
+    C_S_TBS: HOST + "/c/s/tbs",
 
     C_F_FORUM_FORUMRECOMMEND: HOST + "/c/f/forum/forumrecommend",
     C_F_FORUM_FORUMSQUARE: HOST + "/c/f/forum/forumsquare",
@@ -59,6 +60,8 @@ var BaiduApi = {
     C_C_FORUM_LIKE: HOST + "/c/c/forum/like",
     C_C_FORUM_UNFAVOLIKE: HOST + "/c/c/forum/unfavolike",
     C_C_IMG_UPLOAD: HOST + "/c/c/img/upload",
+    C_C_IMG_CHUNKUPLOAD: HOST + "/c/c/img/chunkupload",
+    C_C_IMG_FINUPLOAD: HOST + "/c/c/img/finupload",
     C_C_VOICE_UPLOAD: HOST + "/c/c/voice/chunkupload",
     C_C_VOICE_FINUPLOAD: HOST + "/c/c/voice/voice_fin_chunk_upload",
     C_C_USER_UNFOLLOW: HOST + "/c/c/user/unfollow",
@@ -154,22 +157,15 @@ BaiduRequest.prototype.sendRequest = function(onSuccess, onFailed){
             }
         }
 
-BaiduRequest.getTBS = function(onSuccess, onFailed){
-            var xhr = new XMLHttpRequest();
-            xhr.onreadystatechange = function(){
-                        if (xhr.readyState === xhr.DONE){
-                            if (xhr.status === 200){
-                                try {
-                                    tbs = JSON.parse(xhr.responseText).tbs;
-                                    onSuccess();
-                                } catch(e){
-                                    onFailed(JSON.stringify(e));
-                                }
-                            }
-                        }
-                    }
-            xhr.open("GET", "http://tieba.baidu.com/dc/common/tbs");
-            xhr.send();
+BaiduRequest.generateSignature = function(params){
+            var paramArray = [];
+            for (var i in params){
+                paramArray.push(i+"="+params[i]);
+            }
+            paramArray = paramArray.sort();
+            var temp = paramArray.join("")+"tiebaclient!!!";
+            var sign = Qt.md5(temp).toUpperCase();
+            return sign;
         }
 
 BaiduRequest.intercomm = function(){

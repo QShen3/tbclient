@@ -3,7 +3,6 @@
 
 #define PORTRAIT_PREFIX "http://tb.himg.baidu.com/sys/portraitn/item/"
 #define IMG_PREFIX "http://imgsrc.baidu.com/forum/pic/item/"
-#define IMG_CDN_HOST "hiphotos.baidu.com"
 #define IMG_UNSUPPORTED_HOST "http://c.tieba.baidu.com/c/p/img"
 #define HOST_PREFIX "http://c.tieba.baidu.com/"
 
@@ -53,7 +52,7 @@ QNetworkReply *TBNetworkAccessManager::createRequest(Operation op, const QNetwor
     if (op == PostOperation){
         req.setRawHeader("User-Agent", "IDP");
     } else {
-        req.setRawHeader("User-Agent", "Mozilla/5.0 (iPod; CPU iPhone OS 6_1_3 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Mobile/10B329");
+        req.setRawHeader("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 7_0_4 like Mac OS X) AppleWebKit/537.51.1 (KHTML, like Gecko) Version/7.0 Mobile/11B554a Safari/9537.53");
     }
     QByteArray urldata = req.url().toString().toAscii();
     // convert unsupported image url
@@ -62,7 +61,7 @@ QNetworkReply *TBNetworkAccessManager::createRequest(Operation op, const QNetwor
         req.setUrl(QUrl::fromEncoded(urldata));
     }
     // set cache control
-    if (req.url().host().endsWith(IMG_CDN_HOST) || urldata.startsWith(PORTRAIT_PREFIX) || urldata.startsWith(IMG_PREFIX)){
+    if (urldata.startsWith(PORTRAIT_PREFIX) || urldata.startsWith(IMG_PREFIX)){
         req.setAttribute(QNetworkRequest::CacheLoadControlAttribute, QNetworkRequest::PreferCache);
     } else {
         req.setAttribute(QNetworkRequest::CacheSaveControlAttribute, false);

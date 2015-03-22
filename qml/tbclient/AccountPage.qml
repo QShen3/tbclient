@@ -12,7 +12,7 @@ MyPage {
         BackButton {}
         ToolButtonWithTip {
             toolTipText: internal.isEdit ? qsTr("OK") : qsTr("Edit");
-            iconSource: "../gfx/"+(internal.isEdit?"ok":"edit")+constant.invertedString+".svg";
+            iconSource: "gfx/"+(internal.isEdit?"ok":"edit")+constant.invertedString+".svg";
             onClicked: internal.isEdit = !internal.isEdit;
         }
     }
@@ -40,7 +40,7 @@ MyPage {
             if (Script.checkAuthData(model.id)){
                 Script.BaiduRequest.intercomm();
                 tbsettings.currentUid = model.id;
-                signalCenter.clearLocalCache();
+                signalCenter.clearLocalCache(true);
                 signalCenter.userChanged();
             } else {
                 removeAccount(index);
@@ -66,7 +66,7 @@ MyPage {
             pageStack.pop(mainPage, true);
             tbsettings.currentUid = "";
             signalCenter.userLogout();
-            signalCenter.clearLocalCache();
+            signalCenter.clearLocalCache(true);
             signalCenter.needAuthorization(true);
         }
     }
@@ -124,7 +124,7 @@ MyPage {
                         Component {
                             id: currentActiveIcon;
                             Image {
-                                source: "../gfx/ok"+constant.invertedString+".svg"
+                                source: "gfx/ok"+constant.invertedString+".svg"
                             }
                         }
                     }

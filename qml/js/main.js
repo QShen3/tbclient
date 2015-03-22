@@ -4,16 +4,17 @@ Qt.include("BaiduService.js");
 Qt.include("storage.js");
 Qt.include("BaiduParser.js");
 
-var signalCenter, tbsettings, utility, workerScript, uploader;
+var signalCenter, tbsettings, utility, workerScript, uploader, imageUploader;
 var __name, __bduss, __portrait;
 var tbs;
 
-function initialize(sc, ts, ut, ws, ul){
+function initialize(sc, ts, ut, ws, ul, iu){
     signalCenter = sc;
     tbsettings = ts;
     utility = ut;
     workerScript = ws;
     uploader = ul;
+    imageUploader = iu;
     if (checkAuthData(tbsettings.currentUid)){
         signalCenter.userChanged();
     } else {
@@ -364,51 +365,16 @@ function addThread(option, onSuccess, onFailed){
 }
 
 function uploadImage(caller, filename){
-    if (uploader.uploadState == 2)
-        uploader.abort();
-    uploader.caller = caller;
-    uploader.open(BaiduApi.C_C_IMG_UPLOAD);
-    uploader.addField("net_type", BaiduConst.net_type);
-    uploader.addField("ka", BaiduConst.ka);
-    uploader.addField("_phone_imei", BaiduConst._phone_imei);
-    uploader.addField("BDUSS", __bduss);
-    uploader.addField("_timestamp", Date.now());
-    uploader.addField("_client_version", BaiduConst._client_version);
-    uploader.addField("_phone_newimei", BaiduConst._phone_newimei);
-    uploader.addField("from", BaiduConst.from);
-    uploader.addField("_client_type", BaiduConst._client_type);
-    uploader.addField("_client_id", BaiduConst._client_id);
-    uploader.addField("cuid", BaiduConst.cuid);
-    uploader.addField("pic_type", 0);
-    uploader.addFile("pic", filename);
-    uploader.send();
+    imageUploader.caller = caller;
+    var extras = { BDUSS: __bduss }
+    imageUploader.startUpload(filename, extras);
 }
 
-function uploadAvatar(caller, filename){
+function chunkUpload(caller, type, filename, offset){
     if (uploader.uploadState == 2)
         uploader.abort();
-    uploader.caller = caller;
-    uploader.open(BaiduApi.C_C_IMG_PORTRAIT);
-    uploader.addField("net_type", BaiduConst.net_type);
-    uploader.addField("ka", BaiduConst.ka);
-    uploader.addField("_phone_imei", BaiduConst._phone_imei);
-    uploader.addField("BDUSS", __bduss);
-    uploader.addField("_timestamp", Date.now());
-    uploader.addField("_client_version", BaiduConst._client_version);
-    uploader.addField("_phone_newimei", BaiduConst._phone_newimei);
-    uploader.addField("from", BaiduConst.from);
-    uploader.addField("_client_type", BaiduConst._client_type);
-    uploader.addField("_client_id", BaiduConst._client_id);
-    uploader.addField("cuid", BaiduConst.cuid);
-    uploader.addField("pic_type", 1);
-    uploader.addFile("pic", filename);
-    uploader.send();
-}
-
-function uploadVoice(caller, filename, offset){
-    if (uploader.uploadState == 2)
-        uploader.abort();
-    var chunk = utility.chunkFile(filename, offset);
+    var chunkLength = type === "Image" ? 51200 : 30720;
+    var chunk = utility.chunkFile(filename, offset, chunkLength);
     var size = utility.fileSize(filename);
 
     uploader.caller = caller;
@@ -424,12 +390,16 @@ function uploadVoice(caller, filename, offset){
     }
     var param = {
         chunk_md5: utility.fileHash(chunk),
-        chunk_no: Math.floor(offset/30720)+1,
+        chunk_no: Math.floor(offset/chunkLength)+1,
         total_length: size,
         length: utility.fileSize(chunk),
-        voice_md5: utility.fileHash(filename),
-        total_num: Math.ceil(size/30720),
+        total_num: Math.ceil(size/chunkLength),
         offset: offset
+    }
+    if (type === "Image"){
+        param.md5 = utility.fileHash(filename);
+    } else {
+        param.voice_md5 = utility.fileHash(filename);
     }
     for (var i in param){
         paramArray.push(i+"="+param[i]);
@@ -439,12 +409,38 @@ function uploadVoice(caller, filename, offset){
     var sign = Qt.md5(tmp).toUpperCase();
     paramArray.push("sign="+sign);
 
-    uploader.open(BaiduApi.C_C_VOICE_UPLOAD);
+    if (type === "Image"){
+        uploader.open(BaiduApi.C_C_IMG_CHUNKUPLOAD);
+    } else {
+        uploader.open(BaiduApi.C_C_VOICE_UPLOAD);
+    }
     paramArray.forEach(function(value){
                            var eq = value.indexOf("=");
                            uploader.addField(value.substring(0, eq), value.substring(eq+1));
                        });
-    uploader.addFile("voice_chunk", chunk);
+    if (type === "Image"){
+        uploader.addFile("pic_chunk", chunk);
+    } else {
+        uploader.addFile("voice_chunk", chunk);
+    }
+    uploader.send();
+}
+
+function uploadAvatar(caller, filename){
+    if (uploader.uploadState == 2)
+        uploader.abort();
+
+    uploader.caller = caller;
+    uploader.open(BaiduApi.C_C_IMG_PORTRAIT);
+    uploader.addField("BDUSS", __bduss);
+    uploader.addField("_client_id", BaiduConst._client_id);
+    uploader.addField("_client_type", "3");
+    uploader.addField("_client_version", "5.7.0");
+    uploader.addField("_phone_imei", BaiduConst._phone_imei);
+    uploader.addField("from", "tieba");
+    uploader.addField("net_type", "1");
+    uploader.addField("timestamp", Date.now());
+    uploader.addFile("pic", filename);
     uploader.send();
 }
 
@@ -464,6 +460,13 @@ function uploadStateChanged(){
 function voiceFinChunkUpload(option, onSuccess, onFailed){
     var req = new BaiduRequest(BaiduApi.C_C_VOICE_FINUPLOAD);
     var param = { voice_md5: option.voiceMd5 }
+    req.signForm(param);
+    req.sendRequest(onSuccess, onFailed);
+}
+
+function imageFinChunkUpload(option, onSuccess, onFailed){
+    var req = new BaiduRequest(BaiduApi.C_C_IMG_FINUPLOAD);
+    var param = { pic_type: 0, md5: option.md5 }
     req.signForm(param);
     req.sendRequest(onSuccess, onFailed);
 }
@@ -781,7 +784,17 @@ function batchSign(option, onSuccess, onFailed){
         req.signForm(param);
         req.sendRequest(onSuccess, onFailed);
     }
-    BaiduRequest.getTBS(s, onFailed);
+    getTBS(s, onFailed);
+}
+
+function getTBS(onSuccess, onFailed){
+    var req = new BaiduRequest(BaiduApi.C_S_TBS);
+    req.signForm();
+    var s = function(obj){
+        tbs = obj.tbs;
+        onSuccess();
+    }
+    req.sendRequest(s, onFailed);
 }
 
 function getForumSquare(onSuccess, onFailed){

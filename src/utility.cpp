@@ -5,7 +5,11 @@
 #include <QtNetwork>
 
 #ifdef Q_OS_SYMBIAN
+#ifdef Q_OS_S60V5
+#include <aknglobalnote.h>
+#else
 #include <akndiscreetpopup.h>       //for discreet popup
+#endif
 #include <avkon.hrh>                //..
 #include <apgcli.h>                 //for launch apps
 #include <apgtask.h>                //..
@@ -18,9 +22,13 @@
 #endif
 
 #ifdef Q_OS_HARMATTAN
-#include <maemo-meegotouch-interfaces/videosuiteinterface.h>
-#include <maemo-meegotouch-interfaces/shareuiinterface.h>
-#include <MDataUri>
+#define CAMERA_SERVICE "com.nokia.maemo.CameraService"
+#define CAMERA_INTERFACE "com.nokia.maemo.meegotouch.CameraInterface"
+#define NOTIFICATION_EVENTTYPE "tbclient"
+
+#include "videosuiteinterface.h"
+#include <MNotification>
+#include <MRemoteAction>
 #endif
 
 Utility::Utility(QObject *parent) :
@@ -108,6 +116,12 @@ void Utility::setValue(const QString &key, const QVariant &value)
         map.insert(key, value);
         settings->setValue(key, value);
     }
+}
+
+void Utility::clearSettings()
+{
+    map.clear();
+    settings->clear();
 }
 
 void Utility::setUserData(const QString &key, const QString &data)
@@ -221,6 +235,8 @@ void Utility::launchPlayer(const QString &url)
 #ifdef Q_OS_SYMBIAN
     QString ramPath = tempPath() + QDir::separator() + "video.ram";
     QFile file(ramPath);
+    if (file.exists())
+        file.remove();
     if (file.open(QIODevice::ReadWrite)){
         QTextStream out(&file);
         out << url;
@@ -256,6 +272,13 @@ QString Utility::selectImage(int param)
         break;
     }
     return result;
+#elif defined(Q_OS_HARMATTAN)
+    if (param == 2){
+        startCamera();
+        return QString();
+    } else {
+        return QString();
+    }
 #else
     Q_UNUSED(param);
     return QFileDialog::getOpenFileName(0, QString(), QString(), "Images (*.png *.gif *.jpg)");
@@ -277,15 +300,47 @@ QColor Utility::selectColor(const QColor &defaultColor)
     }
 }
 
-void Utility::showNotification(const QString &title, const QString &message) const
+void Utility::showNotification(const QString &title, const QString &message)
 {
-#ifdef Q_OS_SYMBIAN
+#ifdef Q_OS_S60V5
+    QtMobility::QSystemDeviceInfo deviceInfo;
+    bool silent = deviceInfo.currentProfile() != QtMobility::QSystemDeviceInfo::NormalProfile
+            && deviceInfo.currentProfile() != QtMobility::QSystemDeviceInfo::LoudProfile;
+    TPtrC16 sMessage(static_cast<const TUint16 *>(message.utf16()), message.length());
+    CAknGlobalNote* note = CAknGlobalNote::NewLC();
+    if (silent){
+        note->SetTone(0);
+    } else {
+        note->SetTone(EAvkonSIDReadialCompleteTone);
+    }
+    note->ShowNoteL(EAknGlobalInformationNote, sMessage);
+    CleanupStack::PopAndDestroy(note);
+#elif defined(Q_OS_SYMBIAN)
     TPtrC16 sTitle(static_cast<const TUint16 *>(title.utf16()), title.length());
     TPtrC16 sMessage(static_cast<const TUint16 *>(message.utf16()), message.length());
     TUid uid = TUid::Uid(0x2006622A);
     TRAP_IGNORE(CAknDiscreetPopup::ShowGlobalPopupL(sTitle, sMessage, KAknsIIDNone, KNullDesC, 0, 0, KAknDiscreetPopupDurationLong, 0, NULL, uid));
+#elif defined(Q_OS_HARMATTAN)
+    clearNotifications();
+    MNotification notification(NOTIFICATION_EVENTTYPE, title, message);
+    MRemoteAction action("com.tbclient", "/com/tbclient", "com.tbclient", "activateWindow");
+    notification.setAction(action);
+    notification.publish();
 #else
     qDebug() << "showNotification:" << title << message;
+#endif
+}
+
+void Utility::clearNotifications()
+{
+#ifdef Q_OS_HARMATTAN
+    QList<MNotification*> activeNotifications = MNotification::notifications();
+    QMutableListIterator<MNotification*> i(activeNotifications);
+    while (i.hasNext()) {
+        MNotification *notification = i.next();
+        if (notification->eventType() == NOTIFICATION_EVENTTYPE)
+            notification->remove();
+    }
 #endif
 }
 
@@ -339,15 +394,40 @@ void Utility::copyToClipbord(const QString &text)
 
 QString Utility::cutImage(const QString &filename, double scale, int x, int y, int width, int height)
 {
+    QImageReader reader(filename);
+    if (!reader.canRead() || !reader.supportsOption(QImageIOHandler::Size))
+        return QString();
+
+    int scaledWidth = reader.size().width();
+    int scaledHeight = reader.size().height();
+    // sourceSize.height: 1000
+    if (scaledHeight > 1000){
+        scaledWidth = scaledWidth * 1000/scaledHeight;
+        scaledHeight = 1000;
+    }
+    scaledWidth *= scale;
+    scaledHeight *= scale;
+    reader.setScaledSize(QSize(scaledWidth, scaledHeight));
+    reader.setScaledClipRect(QRect(x, y, width, height));
+    QImage image = reader.read();
+    QString result = tempPath().append(QDir::separator()).append("avatar_temp.jpg");
+    if (!image.isNull() && image.save(result))
+        return result;
+
+    return QString();
+}
+
+QString Utility::resizeImage(const QString &filename)
+{
     QImage image(filename);
     if (image.isNull())
         return QString();
-    // sourceSize.height: 1000;
-    if (image.height() > 1000)
-        image = image.scaledToHeight(1000);
-    image = image.scaled(image.width()*scale, image.height()*scale);
-    image = image.copy(x, y, width, height);
-    QString result = tempPath() + QDir::separator() + "avatar_temp.jpg";
+    if (image.width() > 1600){
+        image = image.scaledToWidth(1600);
+    } else if (image.height() > 1600){
+        image = image.scaledToHeight(1600);
+    }
+    QString result = tempPath() + QDir::separator() + "upload_temp.jpg";
     if (image.save(result)){
         return result;
     } else {
@@ -419,11 +499,28 @@ QString Utility::hasForumName(const QByteArray &link)
     return kw;
 }
 
+QString Utility::fixUrl(const QString &url) const
+{
+    const QString prefix = "http://tieba.baidu.com/mo/q/checkurl";
+    if (url.startsWith(prefix)){
+        QUrl temp(url);
+        if (temp.hasEncodedQueryItem("url")){
+            return QUrl::fromEncoded(temp.queryItemValue("url").toAscii()).toString();
+        }
+    }
+    return url;
+}
+
 QString Utility::emoticonUrl(const QString &name) const
 {
-    QString path = QDir::currentPath().append("/");
+#ifdef Q_OS_HARMATTAN
+    QString path("file:///opt/tbclient/");
+#else
+    QString path("file:///");
+    path.append(QDir::currentPath()).append("/");
+#endif
 
-    if (name.startsWith("image_emoticon")||name.startsWith("write_face_")||name.startsWith("image_editoricon")){
+    if (name.startsWith("image_emoticon")||name.startsWith("write_face_")||name.startsWith("image_editoricon")||name.startsWith("i_f")){
         QRegExp reg("\\d+");
         int index = reg.indexIn(name) > -1 ? reg.cap().toInt() : 1;
         if (index == 1)
@@ -455,7 +552,11 @@ QString Utility::emoticonText(const QString &name)
 QStringList Utility::customEmoticonList()
 {
     if (m_emolist.isEmpty()){
+#ifdef Q_OS_HARMATTAN
+        QFile file("/opt/tbclient/qml/emo/custom.dat");
+#else
         QFile file("qml/emo/custom.dat");
+#endif
         if (file.open(QIODevice::ReadOnly)){
             QTextStream out(&file);
             out.setCodec("UTF-8");
@@ -590,7 +691,11 @@ inline void Utility::q_fromPercentEncoding(QByteArray *ba, char percent)
 
 void Utility::initializeEmoticonHash()
 {
+#ifdef Q_OS_HARMATTAN
+    QFile file("/opt/tbclient/qml/emo/emo.dat");
+#else
     QFile file("qml/emo/emo.dat");
+#endif
     if (file.open(QIODevice::ReadOnly)){
         QTextStream out(&file);
         out.setCodec("UTF-8");
@@ -686,13 +791,21 @@ QString Utility::CaptureImage()
     CAiwGenericParamList* paramList = CAiwGenericParamList::NewLC();
 
     TAiwVariant variant(EFalse);
+#ifdef Q_OS_S60V5
+    TAiwGenericParam param1(170, variant);
+#else
     TAiwGenericParam param1(EGenericParamMMSSizeLimit, variant);
+#endif
     paramList->AppendL( param1 );
 
     TSize resolution = TSize(1600, 1200);
     TPckgBuf<TSize> buffer( resolution );
     TAiwVariant resolutionVariant( buffer );
+#ifdef Q_OS_S60V5
+    TAiwGenericParam param( 171, resolutionVariant );
+#else
     TAiwGenericParam param( EGenericParamResolution, resolutionVariant );
+#endif
     paramList->AppendL( param );
 
     const TUid KUidCamera = { 0x101F857A }; // Camera UID for S60 5th edition
@@ -737,4 +850,48 @@ QString Utility::LaunchLibrary2()
     CleanupStack::PopAndDestroy(fileNames);
     return result.join("\n");
 }
+#endif
+
+#ifdef Q_OS_HARMATTAN
+void Utility::startCamera()
+{
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    bus.connect(CAMERA_SERVICE, "/", CAMERA_INTERFACE,
+                "captureCanceled", this, SLOT(captureCanceled(QString)));
+    bus.connect(CAMERA_SERVICE, "/", CAMERA_INTERFACE,
+                "captureCompleted", this, SLOT(captureCompleted(QString,QString)));
+    QDBusMessage message = QDBusMessage::createMethodCall(CAMERA_SERVICE, "/", CAMERA_INTERFACE, "showCamera");
+    QVariantList arguments;
+    uint someVar = 0;
+    arguments << someVar << "" << "still-capture" << true;
+    message.setArguments(arguments);
+    QDBusMessage reply = bus.call(message);
+    if (reply.type() == QDBusMessage::ErrorMessage){
+        disconnectSignals();
+    }
+}
+
+void Utility::disconnectSignals()
+{
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    bus.disconnect(CAMERA_SERVICE, "/", CAMERA_INTERFACE,
+                   "captureCanceled", this, SLOT(captureCanceled(QString)));
+
+    bus.disconnect(CAMERA_SERVICE, "/", CAMERA_INTERFACE,
+                   "captureCompleted", this, SLOT(captureCompleted(QString,QString)));
+}
+
+void Utility::captureCompleted(const QString &mode, const QString &fileName)
+{
+    Q_UNUSED(mode)
+    disconnectSignals();
+    emit imageCaptured(fileName);
+}
+
+void Utility::captureCanceled(const QString &mode)
+{
+    Q_UNUSED(mode)
+    disconnectSignals();
+}
+
 #endif

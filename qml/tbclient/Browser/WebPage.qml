@@ -14,18 +14,18 @@ MyPage {
         BackButton {}
         ToolButtonWithTip {
             toolTipText: loading ? webView.stop.toolTip : webView.reload.toolTip;
-            iconSource: loading ? "../../gfx/tb_close_stop"+constant.invertedString+".svg" : "toolbar-refresh";
+            iconSource: loading ? "../gfx/tb_close_stop"+constant.invertedString+".svg" : "toolbar-refresh";
             enabled: loading ? webView.stop.enabled : webView.reload.enabled;
             onClicked: loading ? webView.stop.trigger() : webView.reload.trigger();
         }
         ToolButtonWithTip {
             toolTipText: qsTr("Home page");
-            iconSource: "../../gfx/home_sousuo.png";
+            iconSource: "../gfx/home_sousuo.png";
             onClicked: homeMenu.open();
         }
         ToolButtonWithTip {
             toolTipText: webView.locking ? qsTr("Locked") : qsTr("Unlocked");
-            iconSource: webView.locking ? "../../gfx/lock.svg" : "../../gfx/unlock.svg";
+            iconSource: webView.locking ? "../gfx/lock"+constant.invertedString+".svg" : "../gfx/unlock"+constant.invertedString+".svg";
             onClicked: {
                 if (!webView.locking){
                     webView.locking = true;
@@ -47,6 +47,7 @@ MyPage {
         id: webView;
         property bool locking: false;
         anchors.fill: parent;
+        defaultFontSize: tbsettings.fontSize;
         onLoadStarted: page.loading = true;
         onLoadFinished: page.loading = false;
         onDownloadStarted: downloadInfo.open();
